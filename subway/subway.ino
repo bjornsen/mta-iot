@@ -1,14 +1,14 @@
-/*
- Based on the LiquidCrystal Library - Hello World
- 
- Demonstrates the use a Winstar 16x2 OLED display.  These are similar, but
- not quite 100% compatible with the Hitachi HD44780 based LCD displays. 
- 
- This sketch prints "Hello OLED World" to the LCD
- and shows the time in seconds since startup.
- 
-  The circuit:
- * LCD RS pin to digital pin 6
+  /*
+   Based on the LiquidCrystal Library - Hello World
+   
+   Demonstrates the use a Winstar 16x2 OLED display.  These are similar, but
+   not quite 100% compatible with the Hitachi HD44780 based LCD displays. 
+   
+   This sketch prints "Hello OLED World" to the LCD
+   and shows the time in seconds since startup.
+   
+    The circuit:
+   * LCD RS pin to digital pin 6
  * LCD R/W pin to digital pin 7
  * LCD Enable pin to digital pin 8
  * LCD D4 pin to digital pin 9
@@ -111,7 +111,7 @@ void lcd_print_arrival_list(const std::vector<ArrivalInfo> &arrival_list) {
       continue;
     }
     struct tm *depart_tm = localtime((time_t *) &arr_info.departure); 
-    Serial.printf("Next departure: %s", ctime((time_t *) &arr_info.departure));
+    Serial.printf("Next departure: %s\r\n", ctime((time_t *) &arr_info.departure));
     diff = difftime((time_t) arr_info.departure, now);
     struct tm *diff_tm = localtime(&diff);
     char buf[4];
@@ -127,7 +127,7 @@ void lcd_print_arrival_list(const std::vector<ArrivalInfo> &arrival_list) {
 
 void setup()
 {
-  Serial.begin(115200);
+  Serial.begin(921600);
   delay(100);
 
   // We start by connecting to a WiFi network
@@ -173,7 +173,7 @@ void setup()
 
 void logger_func(enum log_level level, char *message) {
         if (level <= LOG_LEVEL) {
-                Serial.print(message);
+                Serial.println(message);
         }
 }
 
@@ -196,8 +196,8 @@ void get_protobuf_data(uint8_t *buffer) {
   while (strncmp(&headers[0], "\r", 1) != 0) {
     memset(&headers[0], 0, 1024);
     int bytes_read = client.readBytesUntil('\n', &headers[0], 1024);
-    Serial.print(String(headers));
-    Serial.print(headers[0], DEC);
+    Serial.println(String(headers));
+    Serial.println(headers[0], DEC);
     Serial.println(headers[1], DEC);
     Serial.println("-----");
   }

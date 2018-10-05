@@ -42,26 +42,26 @@
 
 #define PB_FIELD_16BIT
 
-const char API_KEY[] = <INSERT_MTA_API_KEY>;
-const char *ssid = <INSERT_WIFI_SSID_HERE>;
-const char *password = <INSERT_WIFI_PASSWORD_HERE>;
-
-// Change these values to customize your project
-const char *STATION_LIST[4] = {"D24N", "R31N","",""};
-const char STOP_NAME[] = "Atlantic Av - Barclays Ctr";
-int FEED_NUMBER = 16; // Look this up at http://datamine.mta.info/list-of-feeds
-
 // initialize the library with the OLED hardware
 // version OLED_Vx and numbers of the interface pins.
 // OLED_V1 = older, OLED_V2 = newer. If 2 doesn't work try 1 ;)
 Adafruit_CharacterOLED lcd(OLED_V2, 14, 32, 15, 33, 27, 12, 13);
 
+// The user should set these values
+const char *STATION_LIST[4] = {"D24N", "R31N","",""};
+const char STOP_NAME[] = "Atlantic Av - Barclays Ctr";
+int FEED_NUMBER = 16;
+const char API_KEY[] = "147b1831f52a260d239082fa92ec8e35";
 // Filter all trains that arrive before you could get to the station
 const time_t TIME_TO_TRAIN = 5 * 60;
 
 // These values probably don't need to change
 int PB_BUFFER_SIZE = 100000;
 int LOG_BUFFER_SIZE = 1024;
+
+// Set up WiFi
+const char *ssid = "An Internet";
+const char *password = "gimmeinternet1!";
 
 // The MTA's data feed hostname
 const char *host = "datamine.mta.info";

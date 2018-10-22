@@ -28,6 +28,7 @@
 #include <WiFi.h>
 #include <Esp.h>
 #include <NTPClient.h>
+#include "secrets.h"
 
 #include "subway.h"
 
@@ -66,8 +67,8 @@ int PB_BUFFER_SIZE = 100000;
 int LOG_BUFFER_SIZE = 1024;
 
 // Set up WiFi
-const char *ssid = "mah_network";
-const char *password = "mah_password";
+const char *ssid = SECRET_SSID;
+const char *password = SECRET_PASS;
 
 // The MTA's data feed hostname
 const char *host = "datamine.mta.info";

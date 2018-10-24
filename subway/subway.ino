@@ -7,15 +7,6 @@
    This sketch prints "Hello OLED World" to the LCD
    and shows the time in seconds since startup.
    
-    The circuit:
-   * LCD RS pin to digital pin 6
- * LCD R/W pin to digital pin 7
- * LCD Enable pin to digital pin 8
- * LCD D4 pin to digital pin 9
- * LCD D5 pin to digital pin 10
- * LCD D6 pin to digital pin 11
- * LCD D7 pin to digital pin 12
-
  There is no need for the contrast pot as used in the LCD tutorial
  
  Library originally added 18 Apr 2008
@@ -37,14 +28,30 @@
 #include <WiFi.h>
 #include <Esp.h>
 #include <NTPClient.h>
+#include "secrets.h"
 
 #include "subway.h"
 
 #define PB_FIELD_16BIT
 
-// initialize the library with the OLED hardware
-// version OLED_Vx and numbers of the interface pins.
-// OLED_V1 = older, OLED_V2 = newer. If 2 doesn't work try 1 ;)
+/*
+ * initialize the library with the OLED hardware
+ * version OLED_Vx and numbers of the interface pins.
+ * OLED_V1 = older, OLED_V2 = newer. If 2 doesn't work try 1 ;)
+
+ Wiring Guide:
+
+   OLED pin  <-->   ESP32 pin
+    4 (rs)          14
+    5 (rw)          32
+    6 (en)          15
+   11 (d4)          33
+   12 (d5)          27
+   13 (d6)          12
+   14 (d7)          13
+
+ Adafruit_CharacterOLED lcd(OLED_V2, version, rs, rw, en, d4, d5, d6, d7);
+*/
 Adafruit_CharacterOLED lcd(OLED_V2, 14, 32, 15, 33, 27, 12, 13);
 
 // The user should set these values
@@ -60,8 +67,8 @@ int PB_BUFFER_SIZE = 100000;
 int LOG_BUFFER_SIZE = 1024;
 
 // Set up WiFi
-const char *ssid = "An Internet";
-const char *password = "gimmeinternet1!";
+const char *ssid = SECRET_SSID;
+const char *password = SECRET_PASS;
 
 // The MTA's data feed hostname
 const char *host = "datamine.mta.info";
@@ -127,7 +134,7 @@ void lcd_print_arrival_list(const std::vector<ArrivalInfo> &arrival_list) {
 
 void setup()
 {
-  Serial.begin(921600);
+  Serial.begin(115200);
   delay(100);
 
   // We start by connecting to a WiFi network
@@ -137,6 +144,10 @@ void setup()
   Serial.print("Connecting to ");
   Serial.println(ssid);
 
+  lcd.begin(16, 2);
+  lcd.clear();
+  lcd.print("Joining Wifi");
+
   WiFi.begin(ssid, password);
   time_client.begin();
 
@@ -144,8 +155,10 @@ void setup()
   {
     delay(500);
     Serial.print(".");
+	lcd.print(".");
   }
 
+  lcd.print("Connected");
   Serial.println("");
   Serial.println("WiFi connected");
   Serial.println("IP address: ");
@@ -162,12 +175,6 @@ void setup()
   log_buffer = (char *) malloc(LOG_BUFFER_SIZE);
   if (!log_buffer) {
     log_message(LOG_ERROR, "log_buffer malloc failed");
-  }
-
-  lcd.begin(16, 2);
-  lcd.clear();
-  if (LOG_LEVEL == LOG_INFO) {
-    lcd.print("The LCD works");
   }
 }
 

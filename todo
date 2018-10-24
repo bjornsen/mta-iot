@@ -1,0 +1,25 @@
+Make "connection lost" message for the display
+Add yr weather display
+
+json example: people in space:
+http://api.open-notify.org/astros.json
+
+Full details on the ESP32 board from Adafruit:
+
+https://learn.adafruit.com/adafruit-huzzah32-esp32-feather
+
+The driver for the board is linked to in their documentation:
+
+https://learn.adafruit.com/adafruit-huzzah32-esp32-feather/using-with-arduino-ide
+
+Direct link for the driver, this driver is the same one needed for
+all the ESP (wifi) boards:
+
+https://www.silabs.com/products/development-tools/software/usb-to-uart-bridge-vcp-drivers
+
+Libraries to download and put in ~/Documents/Arduino/libraries (on OSX, anyway):
+
+https://github.com/ladyada/Adafruit_CharacterOLED
+https://github.com/arduino-libraries/NTPClient
+
+

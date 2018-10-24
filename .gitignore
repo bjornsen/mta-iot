@@ -1,3 +1,5 @@
 *.o
 .DS_Store
 .vscode
+subway/secrets.h
+simpleWifi/secrets.h

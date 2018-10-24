@@ -25,6 +25,7 @@
 
 // include the library code:
 #include <Adafruit_CharacterOLED.h>
+#include <ArduinoJson.h>
 #include <WiFi.h>
 #include "secrets.h"
 
@@ -57,15 +58,23 @@ const char password[] = SECRET_PASS;
 // Astronaut data feed hostname
 const char *host = "http://api.open-notify.org/astros.json";
 
+String json_text;
+int endResponse = 0;
+boolean start_json = false;
+unsigned long lastConnectionTime = 10 * 60 * 1000; 	// last connect time
+const unsigned long POSTING_INTERVAL = 10 * 60 * 1000; // 10 minutes
+
 WiFiClient client;
 
 void setup()
 {
+  Serial.begin(115200);
+  delay(100);
+
   Serial.println();
   Serial.println("In setup");
 
-  Serial.begin(115200);
-  delay(100);
+  json_text.reserve(JSON_BUFF_DIMENSION);
 
   // Start by connecting to a WiFi network
 
@@ -99,10 +108,26 @@ void setup()
 
 void loop()
 {
-  delay(5000);
+  // if 10 minutes have passed since the last check,
+  // connect again and request new data.
+  if (millis() - lastConnectionTime > POSTING_INTERVAL) {
+    // the interval is up, time for a new request, record current time first
+    lastConnectionTime = millis();
+    httpRequest();
+  }
 
   lcd.clear();
 
   Serial.println("another pass through the loop");
 
+}
+
+
+void httpRequest() {
+  // Close any connection to server before opening a new one
+  client.stop(); 
+  
+  // if there is a successful connection
+  if (client.connect(server, 80)) {
+  }
 }

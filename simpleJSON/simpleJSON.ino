@@ -55,14 +55,18 @@ Adafruit_CharacterOLED lcd(OLED_V2, 14, 32, 15, 33, 27, 12, 13);
 const char ssid[] = SECRET_SSID;
 const char password[] = SECRET_PASS;
 
-// Astronaut data feed hostname
-const char *host = "http://api.open-notify.org/astros.json";
-
-String json_text;
 int endResponse = 0;
-boolean start_json = false;
+boolean startJson = false;
 unsigned long lastConnectionTime = 10 * 60 * 1000; 	// last connect time
 const unsigned long POSTING_INTERVAL = 10 * 60 * 1000; // 10 minutes
+
+StaticJsonBuffer<JSON_BUFF_DIMENSION> jsonBuffer;
+
+// where our data is coming from
+const char SERVER[] = "api.open-notify.org";
+
+// variable to hold the JSON-structured data
+String incoming_text;
 
 WiFiClient client;
 
@@ -74,8 +78,6 @@ void setup()
   Serial.println();
   Serial.println("In setup");
 
-  json_text.reserve(JSON_BUFF_DIMENSION);
-
   // Start by connecting to a WiFi network
 
   Serial.println();
@@ -85,6 +87,7 @@ void setup()
 
   lcd.begin(16, 2);
   lcd.clear();
+  lcd.setCursor(0,0);
   lcd.print("Joining Wifi");
 
   WiFi.begin(ssid, password);
@@ -113,21 +116,79 @@ void loop()
   if (millis() - lastConnectionTime > POSTING_INTERVAL) {
     // the interval is up, time for a new request, record current time first
     lastConnectionTime = millis();
+    lcd.setCursor(0,0);
+    lcd.print("in loop -> httpRequest");
     httpRequest();
   }
 
-  lcd.clear();
+  // read in the result of the httpRequest
+  char c = 0;
+  if (client.available()) {
+    c = client.read();
 
-  Serial.println("another pass through the loop");
-
+    if (endResponse == 0 && startJson == true) {
+      // we're done reading, time to parse
+      parseJson(incoming_text.c_str()); 
+      incoming_text = "";  // clear the string for the next httpRequest
+      startJson = false; 
+    }
+    if (c == '{') {
+      startJson = true;
+      endResponse++;
+    }
+    if (c == '}') {
+      endResponse--;
+    }
+    if (startJson == true) {
+      incoming_text += c;
+    }
+  }
 }
 
 
 void httpRequest() {
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("in httpRequest()");
   // Close any connection to server before opening a new one
   client.stop(); 
   
   // if there is a successful connection
-  if (client.connect(server, 80)) {
+  if (client.connect(SERVER, 80)) {
+    client.println("GET /astros.json HTTP/1.1\r\nHost: api.open-notify.org\r\n\r\n");
+    client.println("Connection: close");
+    client.println();
+  } else {
+    lcd.setCursor(0,0);
+    lcd.print("json connect failed");
+    Serial.println("connection to JSON source failed");
   }
+}
+
+
+void parseJson(String json_string) {
+  Serial.println(json_string);
+  // cast the string to a character array for parseObject
+  char * json = new char [json_string.length() +1];
+  strcpy(json, json_string.c_str());
+
+  // actually parse it
+  JsonObject& root = jsonBuffer.parseObject(json);
+
+  // make sure it worked
+  if (!root.success()) {
+    Serial.println("parseObject() failed");
+    return;
+  }
+
+  // extract the data we want
+  int number_of_astros = root["number"];
+
+  // print it to the display
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("There are ");
+  lcd.print(number_of_astros);
+  lcd.setCursor(0,1);
+  lcd.print(" humans in space.");
 }

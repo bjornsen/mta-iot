@@ -1,5 +1,7 @@
 Clone this repository and place it in a Arduino project directory called "subway"
 
+Move subway/secrets.h.template to subway/secrets.h and stash all your secrets.
+
 Install the ESP32 drivers found here: https://www.silabs.com/products/development-tools/software/usb-to-uart-bridge-vcp-drivers
  - Linux users need to create an account.
 

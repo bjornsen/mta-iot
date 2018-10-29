@@ -13,7 +13,9 @@ NTPClient. Go to Sketch -> Add Library -> Library Manager. Search for NTPClient 
 
 Copy all headers + C into project directory.
 
+Static MTA GTFS resources - such as station lookups - are found here: https://transitfeeds.com/p/mta/79
+
 Linux:
  - Install pyserial
 
- 
+Cannot do 5G WiFi.

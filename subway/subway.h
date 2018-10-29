@@ -19,7 +19,6 @@ enum log_level {LOG_ERROR, LOG_WARN, LOG_INFO, LOG_DEBUG};
 extern const char *STATION_LIST[4];
 extern const char STOP_NAME[];
 extern int FEED_NUMBER;
-extern const char API_KEY[];
 extern enum log_level LOG_LEVEL;
 
 extern int entity_count;

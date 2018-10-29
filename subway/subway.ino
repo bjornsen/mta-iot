@@ -1,14 +1,14 @@
   /*
    Based on the LiquidCrystal Library - Hello World
-   
+
    Demonstrates the use a Winstar 16x2 OLED display.  These are similar, but
-   not quite 100% compatible with the Hitachi HD44780 based LCD displays. 
-   
+   not quite 100% compatible with the Hitachi HD44780 based LCD displays.
+
    This sketch prints "Hello OLED World" to the LCD
    and shows the time in seconds since startup.
-   
+
  There is no need for the contrast pot as used in the LCD tutorial
- 
+
  Library originally added 18 Apr 2008
  by David A. Mellis
  library modified 5 Jul 2009
@@ -19,7 +19,7 @@
  by Tom Igoe
  Library & Example Converted for OLED
  by Bill Earl 30 Jun 2012
- 
+
  This example code is in the public domain.
  */
 
@@ -29,6 +29,8 @@
 #include <Esp.h>
 #include <NTPClient.h>
 #include "secrets.h"
+
+#include <algorithm>
 
 #include "subway.h"
 
@@ -55,16 +57,16 @@
 Adafruit_CharacterOLED lcd(OLED_V2, 14, 32, 15, 33, 27, 12, 13);
 
 // The user should set these values
+// Look up your station from stops.txt downloaded here: https://transitfeeds.com/p/mta/79
 const char *STATION_LIST[4] = {"D24N", "R31N","",""};
 const char STOP_NAME[] = "Atlantic Av - Barclays Ctr";
 int FEED_NUMBER = 16;
-const char API_KEY[] = "147b1831f52a260d239082fa92ec8e35";
 // Filter all trains that arrive before you could get to the station
 const time_t TIME_TO_TRAIN = 5 * 60;
 
 // These values probably don't need to change
-int PB_BUFFER_SIZE = 100000;
-int LOG_BUFFER_SIZE = 1024;
+const int LOG_BUFFER_SIZE = 1024;
+const int PB_CHUNK_SIZE = 4096;
 
 // Set up WiFi
 const char *ssid = SECRET_SSID;
@@ -73,10 +75,14 @@ const char *password = SECRET_PASS;
 // The MTA's data feed hostname
 const char *host = "datamine.mta.info";
 
+// Used for tracking streaming data from MTA upstream
+int data_chunk_left = -1;
+int data_buf_left = -1;
+int data_buf_offset = 0;
+
+uint8_t data_buf[PB_CHUNK_SIZE];
 // Other useful globals
-uint8_t *pb_buffer = NULL;
 char *log_buffer = NULL;
-int total_data_bytes = 0;
 WiFiClient client;
 
 // Set up time
@@ -91,9 +97,10 @@ bool arrival_cmp(ArrivalInfo a, ArrivalInfo b) {
   return (a.departure < b.departure);
 }
 
+// Print a list of train arrivals to the attached LCD screen
 void lcd_print_arrival_list(const std::vector<ArrivalInfo> &arrival_list) {
   time_t now, diff;
-  
+
   // This doesn't work by default on the ESP32
   now = (time_t) time_client.getEpochTime();
   snprintf(log_buffer, LOG_BUFFER_SIZE,"Current time: %s", ctime(&now));
@@ -108,19 +115,20 @@ void lcd_print_arrival_list(const std::vector<ArrivalInfo> &arrival_list) {
     }
     // Don't display trains that arrive before now
     snprintf(log_buffer, LOG_BUFFER_SIZE,
-             "Next train unix: %lld\nnow + TTT: %d\n",
+             "Next train unix: %lld\nnow + TTT: %d",
              (long long) arr_info.departure,
              now + TIME_TO_TRAIN);
-    log_message(LOG_INFO, log_buffer);
+    log_message(LOG_DEBUG, log_buffer);
+
+    // Filter out trains that are impossible to make
     diff = difftime((time_t) arr_info.departure, now + TIME_TO_TRAIN);
     if (diff < 0) {
-      log_message(LOG_INFO, "Departure not less than");
       continue;
     }
-    struct tm *depart_tm = localtime((time_t *) &arr_info.departure); 
-    Serial.printf("Next departure: %s\r\n", ctime((time_t *) &arr_info.departure));
+
     diff = difftime((time_t) arr_info.departure, now);
     struct tm *diff_tm = localtime(&diff);
+
     char buf[4];
     strftime(&buf[0], 4, "%M", diff_tm);
     snprintf(&lcd_buffer[0], 16, "%s - %s min",
@@ -130,6 +138,149 @@ void lcd_print_arrival_list(const std::vector<ArrivalInfo> &arrival_list) {
     lcd.print(&lcd_buffer[0]);
     count++;
   }
+}
+
+void logger_func(enum log_level level, char *message) {
+        if (level <= LOG_LEVEL) {
+                Serial.println(message);
+        }
+}
+
+// Get the next chunk size from the chunked data transfer
+int get_next_chunk_size(WiFiClient *client) {
+  char chunk_str[16];
+  int bytes_read = 0;
+
+  while (!client->available())
+  {
+    delay(100);
+    Serial.printf("Waiting to get_next_chunk_size...\n");
+  }
+  bytes_read = client->readBytesUntil('\n', &chunk_str[0], SIZE_MAX);
+  Serial.printf("Read %d bytes\n", bytes_read);
+
+  // Guard against the caller passing us a client that hasn't cleared
+  // the CRLF after the previous chunk data.
+  if (strncmp((char *) &chunk_str[0], "\r", 1) == 0) {
+    bytes_read = client->readBytesUntil('\n', &chunk_str[0], SIZE_MAX);
+    Serial.printf("Read %d bytes\n", bytes_read);
+  }
+
+  chunk_str[bytes_read] = '\0';
+  int chunk_length = strtol(chunk_str, NULL, 16);
+  Serial.printf("Next chunk length is %d bytes\n", chunk_length);
+  return chunk_length;
+}
+
+int wifi_read(uint8_t *buf, int bytes_to_read) {
+  int bytes_read = 0;
+  while (bytes_to_read > bytes_read)
+  {
+    while (!client.available())
+    {
+      delay(100);
+      Serial.printf("Waiting to wifi_read...\n");
+    }
+    bytes_read += client.read(buf, bytes_to_read - bytes_read);
+    Serial.printf("Read %d bytes in callback\n", bytes_read);
+  }
+  return bytes_read;
+}
+
+// Returns false and sets bytes_left for EOF
+bool pb_istream_callback(pb_istream_t *stream, uint8_t *buf, size_t count) {
+  WiFiClient *client = (WiFiClient*) stream->state;
+  bool status = true;
+  int bytes_to_read = 0;
+  int bytes_read = 0;
+
+  // Read in data when we have none
+  if (data_chunk_left <= 0 && data_buf_left <= 0) {
+    data_chunk_left = get_next_chunk_size(client);
+    if (data_chunk_left == 0) {
+      log_message(LOG_INFO, "Chunked transfer has zero bytes left");
+      stream->bytes_left = 0;
+      return false;
+    }
+    bytes_to_read = std::min(PB_CHUNK_SIZE, data_chunk_left);
+
+    // Read data into buffer and reset the buffer offset
+    bytes_read = wifi_read(&data_buf[0], bytes_to_read);
+    data_buf_left = bytes_read;
+    data_chunk_left -= bytes_read;
+    data_buf_offset = 0;
+  }
+
+  snprintf(log_buffer, LOG_BUFFER_SIZE, "%d bytes left in buffer with %d chunk left for %d requested",
+           data_buf_left,
+           data_chunk_left,
+           count);
+  log_message(LOG_DEBUG, log_buffer);
+
+  if (count <= data_buf_left) {
+    snprintf(log_buffer, LOG_BUFFER_SIZE, "Copying %d bytes from offset %d", count, data_buf_offset);
+    log_message(LOG_DEBUG, log_buffer);
+    strncpy((char *) buf, (char *) &data_buf[data_buf_offset], count);
+    data_buf_offset += count;
+    data_buf_left -= count;
+  } else {
+    // Copy the rest of the buffer into the caller's buffer
+    strncpy((char *) buf, (char *) &data_buf[data_buf_offset], data_buf_left);
+    // Remember an offset for the caller's buffer to continue writing
+    int offset = data_buf_left;
+    // Decrement the amount of data to be read
+    count -= data_buf_left;
+
+    // Get the next chunk if there's nothing left in this one
+    if (data_chunk_left == 0) {
+      data_chunk_left = get_next_chunk_size(client);
+      if (data_chunk_left == 0) {
+        log_message(LOG_INFO, "Stream indicated EOF");
+        stream->bytes_left = 0;
+        return false;
+      }
+    }
+
+    bytes_to_read = std::min(PB_CHUNK_SIZE, data_chunk_left);
+    bytes_read = wifi_read(&data_buf[0], bytes_to_read);
+    data_buf_left = bytes_read;
+    data_chunk_left -= bytes_read;
+    data_buf_offset = 0;
+
+    // Copy the rest of the requested bytes into the appropriate offset
+    strncpy((char *) buf+offset, (char *) &data_buf[data_buf_offset], count);
+    data_buf_offset += count;
+    data_buf_left -= count;
+  }
+
+  return status;
+}
+
+// Sends a GET request to the MTA then reads and prints the headers
+void request_data() {
+  // This will send the request to the server
+  int url_len = 256;
+  char url[url_len];
+  snprintf(&url[0], url_len, "/mta_esi.php?key=%s&feed_id=%i", API_KEY, FEED_NUMBER);
+
+  // Create a URI for the request
+  log_message(LOG_INFO, "Requesting URL: ");
+  log_message(LOG_INFO, url);
+  char request[1024];
+  snprintf(request, 1024, "GET %s HTTP/1.1\r\nHost: %s\r\n\r\n", url, host);
+  client.print(request);
+  delay(1000);
+
+  // Read all of the headers
+  char headers[1024];
+  memset(&headers, 0, 1024);
+  while (strncmp(&headers[0], "\r", 1) != 0) {
+    memset(&headers[0], 0, 1024);
+    int bytes_read = client.readBytesUntil('\n', &headers[0], 1024);
+    Serial.print(String(headers));
+    Serial.println("-----");
+  }
+  Serial.println("End of headers");
 }
 
 void setup()
@@ -167,92 +318,20 @@ void setup()
   logger_callback logger_callback_ptr = logger_func;
   register_logger(logger_callback_ptr);
 
-  pb_buffer = (uint8_t *) malloc(PB_BUFFER_SIZE);
-  if (!pb_buffer) {
-    log_message(LOG_ERROR, "pb_buffer malloc failed");
-  }
-
   log_buffer = (char *) malloc(LOG_BUFFER_SIZE);
   if (!log_buffer) {
     log_message(LOG_ERROR, "log_buffer malloc failed");
   }
 }
 
-void logger_func(enum log_level level, char *message) {
-        if (level <= LOG_LEVEL) {
-                Serial.println(message);
-        }
-}
-
-void get_protobuf_data(uint8_t *buffer) {
-  // This will send the request to the server
-  int url_len = 256;
-  char url[url_len];
-  snprintf(&url[0], url_len, "/mta_esi.php?key=%s&feed_id=%i", API_KEY, FEED_NUMBER);
-  // We now create a URI for the request
-  log_message(LOG_INFO, "Requesting URL: ");
-  log_message(LOG_INFO, url);
-  char request[1024];
-  snprintf(request, 1024, "GET %s HTTP/1.1\r\nHost: %s\r\n\r\n", url, host);
-  client.print(request);
-  delay(1000);
-
-  // Read all of the headers
-  char headers[1024];
-  memset(&headers, 0, 1024);
-  while (strncmp(&headers[0], "\r", 1) != 0) {
-    memset(&headers[0], 0, 1024);
-    int bytes_read = client.readBytesUntil('\n', &headers[0], 1024);
-    Serial.println(String(headers));
-    Serial.println(headers[0], DEC);
-    Serial.println(headers[1], DEC);
-    Serial.println("-----");
-  }
-  Serial.println("End of headers");
-
-  int bytes_read = 0;
-  char transfer_length[8];
-
-  total_data_bytes = 0;
-  long tl = -1;
-  while(true) {
-    // Read until CRLF
-    bytes_read = client.readBytesUntil('\n', &transfer_length[0], SIZE_MAX);
-    Serial.printf("Read %d bytes\n", bytes_read);
-    transfer_length[bytes_read] = '\0';
-    tl = strtol(transfer_length, NULL, 16);
-    if (tl == 0) {
-      break;
-    }
-    Serial.printf("Next transfer holds %d bytes\n", tl);
-    Serial.printf("There are %d bytes ready to be read\n", client.available());
-    while (tl > 0) {
-      while(!client.available()) {
-        delay(100);
-        Serial.printf("Waiting...\n");
-      }
-      bytes_read = client.read(&(buffer[total_data_bytes]), tl);
-      tl -= bytes_read;
-      total_data_bytes += bytes_read;
-      Serial.printf("%d bytes left to read\n", tl);
-    }
-    bytes_read = client.readBytesUntil('\n', &transfer_length[0], SIZE_MAX);
-    Serial.printf("Cleared 2 bytes confirmed with %d\n", bytes_read);
-    Serial.printf("Read %d so far\n", total_data_bytes);
-  }
-}
-
-int value = 0;
-
 void loop()
 {
   delay(5000);
-  ++value;
+
+  time_client.update();
 
   Serial.print("connecting to ");
   Serial.println(host);
-
-  time_client.update();
 
   // Use WiFiClient class to create TCP connections
   const int httpPort = 80;
@@ -261,11 +340,12 @@ void loop()
     Serial.println("connection failed");
     return;
   }
+  request_data();
 
-  memset(pb_buffer, 0, 80000);
-  get_protobuf_data(pb_buffer);
-
-  pb_istream_t istream = pb_istream_from_buffer((pb_byte_t *) pb_buffer, total_data_bytes);
+  data_chunk_left = 0;
+  data_buf_left = 0;
+  data_buf_offset = 0;
+  pb_istream_t istream = {&pb_istream_callback, &client, SIZE_MAX};
 
   transit_realtime_FeedMessage feedmessage = {};
   memset(&feedmessage, 0,sizeof(transit_realtime_FeedMessage));
@@ -278,16 +358,16 @@ void loop()
   if (!ret)
   {
     log_message(LOG_ERROR, "Decode failed");
+    delay(1000);
+  } else {
+    std::sort(arrival_list.begin(), arrival_list.end(), arrival_cmp);
+
+    // Read all the lines of the reply from server and print them to Serial
+    print_arrival_list(arrival_list);
+    lcd_print_arrival_list(arrival_list);
+
+    snprintf(log_buffer, LOG_BUFFER_SIZE, "%d bytes left in the heap", ESP.getFreeHeap());
+    log_message(LOG_DEBUG, log_buffer);
+    delay(30000);
   }
-  std::sort(arrival_list.begin(), arrival_list.end(), arrival_cmp);
-
-  // Read all the lines of the reply from server and print them to Serial
-  print_arrival_list(arrival_list);
-  lcd_print_arrival_list(arrival_list);
-
-  log_message(LOG_INFO, "\nClosing connection\n");
-
-  snprintf(log_buffer, LOG_BUFFER_SIZE, "%d", ESP.getFreeHeap());
-  log_message(LOG_INFO, log_buffer);
-  delay(30000);
 }

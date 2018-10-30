@@ -29,7 +29,8 @@
 #include <PubSubClient.h>
 #include "secrets.h"
 
-#define JSON_BUFF_DIMENSION 2500
+#define MQTT_BROKER_IP "192.168.1.92"
+#define MQTT_PORT 1881
 
 /*
  * initialize the library with the OLED hardware
@@ -55,19 +56,6 @@ Adafruit_CharacterOLED lcd(OLED_V2, 14, 32, 15, 33, 27, 12, 13);
 const char ssid[] = SECRET_SSID;
 const char password[] = SECRET_PASS;
 
-int endResponse = 0;
-boolean startJson = false;
-unsigned long lastConnectionTime = 10 * 60 * 1000; 	// last connect time
-const unsigned long POSTING_INTERVAL = 10 * 60 * 1000; // 10 minutes
-
-StaticJsonBuffer<JSON_BUFF_DIMENSION> jsonBuffer;
-
-// where our data is coming from
-const char SERVER[] = "api.open-notify.org";
-
-// variable to hold the JSON-structured data
-String incoming_text;
-
 WiFiClient wifi_client;
 PubSubClient mqtt_client(wifi_client);
 
@@ -82,50 +70,18 @@ void setup()
   // Start by connecting to a WiFi network
   connectWifi();
 
-  lcd.clear();
-  lcd.setCursor(0,0);
-  lcd.print("Connected");
-  Serial.println("");
-  Serial.println("WiFi connected");
-  Serial.println("IP address: ");
-  Serial.println(WiFi.localIP());
+  // Then connect to the MQTT broker
+  connectMQTT();
+
 }
 
 
 void loop()
 {
-  // if 10 minutes have passed since the last check,
-  // connect again and request new data.
-  if (millis() - lastConnectionTime > POSTING_INTERVAL) {
-    // the interval is up, time for a new request, record current time first
-    lastConnectionTime = millis();
-    lcd.setCursor(0,0);
-    lcd.print("in loop -> httpRequest");
-    httpRequest();
+  if (!mqtt_client.connected()) {
+    reconnect();
   }
-
-  // read in the result of the httpRequest
-  char c = 0;
-  if (client.available()) {
-    c = client.read();
-
-    if (endResponse == 0 && startJson == true) {
-      // we're done reading, time to parse
-      parseJson(incoming_text.c_str()); 
-      incoming_text = "";  // clear the string for the next httpRequest
-      startJson = false; 
-    }
-    if (c == '{') {
-      startJson = true;
-      endResponse++;
-    }
-    if (c == '}') {
-      endResponse--;
-    }
-    if (startJson == true) {
-      incoming_text += c;
-    }
-  }
+  mqtt_client.loop();
 }
 
 void connectWifi()
@@ -148,51 +104,65 @@ void connectWifi()
     Serial.print(".");
     lcd.print(".");
   }
-}
 
-void httpRequest() {
   lcd.clear();
   lcd.setCursor(0,0);
-  lcd.print("in httpRequest()");
-  // Close any connection to server before opening a new one
-  client.stop(); 
-  
-  // if there is a successful connection
-  if (client.connect(SERVER, 80)) {
-    client.println("GET /astros.json HTTP/1.1\r\nHost: api.open-notify.org\r\n\r\n");
-    client.println("Connection: close");
-    client.println();
-  } else {
+  lcd.print("Connected");
+  Serial.println("");
+  Serial.println("WiFi connected");
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
+}
+
+
+void connectMQTT()
+{
+  delay(1000);
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("Connecting to MQTT");
+  Serial.print("Connecting to MQTT server ");
+  Serial.print(MQTT_BROKER_IP);
+  Serial.print(":");
+  Serial.println(MQTT_PORT);
+  mqtt_client.setServer(MQTT_BROKER_IP, MQTT_PORT);
+  mqtt_client.setCallback(callback);
+
+  if (mqtt_client.connected()) {
+    Serial.println("MQTT: Connected");
+    lcd.clear();
     lcd.setCursor(0,0);
-    lcd.print("json connect failed");
-    Serial.println("connection to JSON source failed");
+    lcd.print("Connected to MQTT");
   }
+  mqtt_client.subscribe("astronauts");
 }
 
 
-void parseJson(String json_string) {
-  Serial.println(json_string);
-  // cast the string to a character array for parseObject
-  char * json = new char [json_string.length() +1];
-  strcpy(json, json_string.c_str());
-
-  // actually parse it
-  JsonObject& root = jsonBuffer.parseObject(json);
-
-  // make sure it worked
-  if (!root.success()) {
-    Serial.println("parseObject() failed");
-    return;
+void reconnect()
+{
+  while (!mqtt_client.connected()) {
+	Serial.print("Attempting MQTT connection");
+    if (mqtt_client.connected()) {
+      Serial.println("Connected to MQTT");
+      mqtt_client.setServer(MQTT_BROKER_IP, MQTT_PORT);
+      mqtt_client.setCallback(callback);
+      mqtt_client.subscribe("astronauts");
+    } else {
+      Serial.println("Failed to connect to MQTT");
+    }
+    delay(5000);
   }
+}
 
-  // extract the data we want
-  int number_of_astros = root["number"];
-
-  // print it to the display
-  lcd.clear();
-  lcd.setCursor(0,0);
-  lcd.print("There are ");
-  lcd.print(number_of_astros);
-  lcd.setCursor(0,1);
-  lcd.print(" humans in space.");
+// MQTT only has a single callback, so you have to figure out
+// which topic it's for, and then process
+void callback(char* topic, byte* payload, unsigned int length)
+{
+  if (topic == "astronauts") {
+    Serial.print("Receiving: ");
+    Serial.print(topic);
+    Serial.print(" = ");
+    Serial.write(payload, length);
+    Serial.println(" ");
+  } 
 }

@@ -74,6 +74,7 @@ uint8_t data_buf[PB_CHUNK_SIZE];
 char *log_buffer = NULL;
 int num_failures = 0;
 time_t last_success = 0;
+
 WiFiClient client;
 
 // Set up time
@@ -298,31 +299,7 @@ void setup()
   delay(100);
 
   // We start by connecting to a WiFi network
-
-  Serial.println();
-  Serial.println();
-  Serial.print("Connecting to ");
-  Serial.println(ssid);
-
-  lcd.begin(16, 2);
-  lcd.clear();
-  lcd.print("Joining Wifi");
-
-  WiFi.begin(ssid, password);
-  time_client.begin();
-
-  while (WiFi.status() != WL_CONNECTED)
-  {
-    delay(500);
-    Serial.print(".");
-	lcd.print(".");
-  }
-
-  lcd.print("Connected");
-  Serial.println("");
-  Serial.println("WiFi connected");
-  Serial.println("IP address: ");
-  Serial.println(WiFi.localIP());
+  connectWiFi();
 
   logger_callback logger_callback_ptr = logger_func;
   register_logger(logger_callback_ptr);
@@ -405,4 +382,35 @@ void loop()
 
     delay(UPDATE_INTERVAL);
   }
+}
+
+void connectWiFi()
+{
+  Serial.println();
+  Serial.println();
+  Serial.print("Connecting to ");
+  Serial.println(ssid);
+
+  lcd.begin(16, 2);
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("Joining Wifi");
+
+  WiFi.begin(ssid, password);
+  time_client.begin();
+
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    delay(500);
+    Serial.print(".");
+    lcd.print(".");
+  }
+
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("Connected");
+  Serial.println("");
+  Serial.println("WiFi connected");
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
 }

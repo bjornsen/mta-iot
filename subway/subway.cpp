@@ -1,13 +1,30 @@
+/** @file subway.cpp
+ *  @brief Helper functions for decoding MTA GTFS via nanopb.
+ *
+ *  Implementation of helper functions for decoding MTA GTFS
+ *  via nanopb.
+ *
+ *  @author Bill Bernsen (bill@nycresistor.com)
+ *  @bug No know bugs.
+ */
+
 #include "subway.h"
 
 int entity_count = 0;
 logger_callback logger = NULL;
+
+// Set the log level
 enum log_level LOG_LEVEL = LOG_INFO;
 
+/* Register a function to handle logging for your device.
+*  This comes in handy when you're switching back and forth
+*  between Arduino and Linux.
+*/
 void register_logger(logger_callback l) {
     logger = l;
 }
 
+// Log a message using the registered logger at the set log level
 void log_message(enum log_level level, char *message) {
     if (logger == NULL) {
         printf("Use register_logger to register a logging function\n");
@@ -17,6 +34,7 @@ void log_message(enum log_level level, char *message) {
     logger(level, message);
 }
 
+// Decodes a trip route id
 bool trip_route_id_callback(pb_istream_t *stream, const pb_field_t *field, void **arg)
 {
   log_message(LOG_DEBUG, "Decoding route_id\n");
@@ -44,6 +62,7 @@ bool trip_route_id_callback(pb_istream_t *stream, const pb_field_t *field, void 
   return true;
 }
 
+// Decodes a stop id
 bool stop_id_callback(pb_istream_t *stream, const pb_field_t *field, void **arg)
 {
   log_message(LOG_DEBUG, "Decoding stop_id\n");
@@ -71,6 +90,7 @@ bool stop_id_callback(pb_istream_t *stream, const pb_field_t *field, void **arg)
   return true;
 }
 
+// Decodes a stop time updatek
 bool stop_time_update_callback(pb_istream_t *stream, const pb_field_t *field, void **arg)
 {
   log_message(LOG_DEBUG, "Decoding stop_time_update\n");
@@ -124,7 +144,7 @@ bool stop_time_update_callback(pb_istream_t *stream, const pb_field_t *field, vo
   return true;
 }
 
-
+// Print a vector of ArrivalInfo
 void print_arrival_list(const std::vector<ArrivalInfo> &arrival_list)
 {
   char message[256];
@@ -138,6 +158,8 @@ void print_arrival_list(const std::vector<ArrivalInfo> &arrival_list)
   }
 }
 
+// Top level callback to register with nanopb. Returns the passed vector of
+// ArrivalInfo filled out.
 bool entity_callback(pb_istream_t *stream, const pb_field_t *field, void **arg)
 {
 

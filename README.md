@@ -1,5 +1,7 @@
 Clone this repository and place it in a Arduino project directory called "subway"
 
+Move subway/secrets.h.template to subway/secrets.h and stash all your secrets.
+
 Install the ESP32 drivers found here: https://www.silabs.com/products/development-tools/software/usb-to-uart-bridge-vcp-drivers
  - Linux users need to create an account.
 
@@ -13,7 +15,9 @@ NTPClient. Go to Sketch -> Add Library -> Library Manager. Search for NTPClient 
 
 Copy all headers + C into project directory.
 
+Static MTA GTFS resources - such as station lookups - are found here: https://transitfeeds.com/p/mta/79
+
 Linux:
  - Install pyserial
 
- 
+Cannot do 5G WiFi.

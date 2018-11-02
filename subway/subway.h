@@ -1,3 +1,14 @@
+/** @file subway.h
+ *  @brief Helper library for interacting with NYC MTA GTFS via nanopb
+ *
+ *  This contains a callback to register with nanopb which will pb_decode
+ *  MTA GTFS information into the provided structure along with generic
+ *  logging capabilities. Intended for use with Arduino.
+ *
+ *  @author Bill Bernsen (bill@nycresistor.com)
+ *  @bug No known bugs.
+ */
+
 #ifndef SUBWAY_H
 #define SUBWAY_H
 
@@ -19,7 +30,6 @@ enum log_level {LOG_ERROR, LOG_WARN, LOG_INFO, LOG_DEBUG};
 extern const char *STATION_LIST[4];
 extern const char STOP_NAME[];
 extern int FEED_NUMBER;
-extern const char API_KEY[];
 extern enum log_level LOG_LEVEL;
 
 extern int entity_count;

@@ -72,14 +72,13 @@ void setup()
 
   // Then connect to the MQTT broker
   connectMQTT();
-
 }
 
 
 void loop()
 {
   if (!mqtt_client.connected()) {
-    reconnect();
+    connectMQTT();
   }
   mqtt_client.loop();
 }
@@ -126,6 +125,8 @@ void connectMQTT()
   Serial.print(":");
   Serial.println(MQTT_PORT);
   mqtt_client.setServer(MQTT_BROKER_IP, MQTT_PORT);
+  // deviceID, usrname,pw
+  mqtt_client.connect("10","","");
   mqtt_client.setCallback(callback);
 
   if (mqtt_client.connected()) {
@@ -133,36 +134,29 @@ void connectMQTT()
     lcd.clear();
     lcd.setCursor(0,0);
     lcd.print("Connected to MQTT");
-  }
+  } 
   mqtt_client.subscribe("astronauts");
 }
 
-
-void reconnect()
-{
-  while (!mqtt_client.connected()) {
-	Serial.print("Attempting MQTT connection");
-    if (mqtt_client.connected()) {
-      Serial.println("Connected to MQTT");
-      mqtt_client.setServer(MQTT_BROKER_IP, MQTT_PORT);
-      mqtt_client.setCallback(callback);
-      mqtt_client.subscribe("astronauts");
-    } else {
-      Serial.println("Failed to connect to MQTT");
-    }
-    delay(5000);
-  }
-}
 
 // MQTT only has a single callback, so you have to figure out
 // which topic it's for, and then process
 void callback(char* topic, byte* payload, unsigned int length)
 {
-  if (topic == "astronauts") {
+  char astronauts[] = "astronauts";
+  if (strcmp(topic, astronauts) == 0) {
     Serial.print("Receiving: ");
     Serial.print(topic);
     Serial.print(" = ");
     Serial.write(payload, length);
     Serial.println(" ");
+    lcd.clear();
+    lcd.setCursor(0,0);
+    for (int i = 0; i < length; i++) {
+      lcd.print((char)(payload[i]));
+    }
+    lcd.print(" humans are in");
+    lcd.setCursor(0,1);
+    lcd.print("space right now.");
   } 
 }

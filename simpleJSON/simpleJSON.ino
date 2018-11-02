@@ -68,16 +68,10 @@ void loop()
   }
 
   // read in the result of the httpRequest
-  char c = 0;
   if (client.available()) {
-    c = client.read();  // reads one character at a time, stores it in "c"
+    char c = client.read();  // reads one character at a time, stores it in "c"
+    Serial.print(c);
 
-    if (unmatchedCurlies == 0 && startedJson == true) {
-      // we're done reading, time to parse
-      parseJson(incoming_text.c_str()); 
-      incoming_text = "";  // clear the string for the next httpRequest
-      startedJson = false; 
-    }
     if (c == '{') {
       startedJson = true;
       unmatchedCurlies++;
@@ -87,6 +81,12 @@ void loop()
     }
     if (startedJson == true) {
       incoming_text += c; // add the character to the incoming_text
+    }
+    if (unmatchedCurlies == 0 && startedJson == true) {
+      // we're done reading, time to parse
+      parseJson(incoming_text); 
+      incoming_text = "";  // clear the string for the next httpRequest
+      startedJson = false; 
     }
   }
 }
@@ -101,9 +101,12 @@ void httpRequest() {
   
   // if there is a successful connection
   if (client.connect(SERVER, 80)) {
-    client.println("GET /astros.json HTTP/1.1\r\nHost: api.open-notify.org\r\n\r\n");
-    client.println("Connection: close");
-    client.println();
+	Serial.println("about to do a GET");
+    client.println("GET /astros.json HTTP/1.1\r\n"
+      "Host: api.open-notify.org\r\n"
+      "Connection: close\r\n"
+      "\r\n");
+	Serial.println("GET is done");
   } else {
     lcd.setCursor(0,0);
     lcd.print("json connect failed");
@@ -115,12 +118,9 @@ void httpRequest() {
 void parseJson(String json_string) {
   Serial.print("incoming_text string: ");
   Serial.println(json_string);
-  // cast the string to a character array for parseObject
-  char * json = new char [json_string.length() +1];
-  strcpy(json, json_string.c_str());
 
-  // actually parse it
-  JsonObject& root = jsonBuffer.parseObject(json);
+  // parse the json!
+  JsonObject& root = jsonBuffer.parseObject(json_string);
 
   // make sure it worked
   if (!root.success()) {

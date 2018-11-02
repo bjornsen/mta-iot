@@ -93,7 +93,9 @@ void connectMQTT()
   delay(1000);
   lcd.clear();
   lcd.setCursor(0,0);
-  lcd.print("Connecting to MQTT");
+  lcd.print("Connecting to");
+  lcd.setCursor(0,1);
+  lcd.print("MQTT");
   Serial.print("Connecting to MQTT server ");
   Serial.print(MQTT_BROKER_IP);
   Serial.print(":");
@@ -107,9 +109,11 @@ void connectMQTT()
     Serial.println("MQTT: Connected");
     lcd.clear();
     lcd.setCursor(0,0);
-    lcd.print("Connected to MQTT");
+    lcd.print("Connected to");
+    lcd.setCursor(0,1);
+    lcd.print("MQTT");
   } 
-  mqtt_client.subscribe("astronauts");
+  mqtt_client.subscribe("Slidervalue");
 }
 
 
@@ -117,20 +121,19 @@ void connectMQTT()
 // which topic it's for, and then process
 void callback(char* topic, byte* payload, unsigned int length)
 {
-  char astronauts[] = "astronauts";
-  if (strcmp(topic, astronauts) == 0) {
     Serial.print("Receiving: ");
     Serial.print(topic);
     Serial.print(" = ");
     Serial.write(payload, length);
     Serial.println(" ");
-    lcd.clear();
+  if (strcmp(topic, "Slidervalue") == 0) {
     lcd.setCursor(0,0);
+    lcd.print("Slider value:   ");
+    lcd.setCursor(16-length,0);
     for (int i = 0; i < length; i++) {
       lcd.print((char)(payload[i]));
     }
-    lcd.print(" humans are in");
     lcd.setCursor(0,1);
-    lcd.print("space right now.");
+    lcd.print("Button: ");
   } 
 }

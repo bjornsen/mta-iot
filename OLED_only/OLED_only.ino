@@ -1,28 +1,3 @@
-  /*
-   Based on the LiquidCrystal Library - Hello World
-   
-   Demonstrates the use a Winstar 16x2 OLED display.  These are similar, but
-   not quite 100% compatible with the Hitachi HD44780 based LCD displays. 
-   
-   This sketch prints "Hello OLED World" to the LCD
-   and shows the time in seconds since startup.
-   
- There is no need for the contrast pot as used in the LCD tutorial
- 
- Library originally added 18 Apr 2008
- by David A. Mellis
- library modified 5 Jul 2009
- by Limor Fried (http://www.ladyada.net)
- example added 9 Jul 2009
- by Tom Igoe
- modified 22 Nov 2010
- by Tom Igoe
- Library & Example Converted for OLED
- by Bill Earl 30 Jun 2012
- 
- This example code is in the public domain.
- */
-
 // include the library code:
 #include <Adafruit_CharacterOLED.h>
 

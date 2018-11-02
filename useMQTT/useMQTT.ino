@@ -6,6 +6,8 @@
 
 #define MQTT_BROKER_IP "192.168.1.92"
 #define MQTT_PORT 1881
+#define BUTTON 21
+#define LED 13  // onboard red LED
 
 /*
  * initialize the library with the OLED hardware
@@ -22,6 +24,8 @@
    12 (d5)          27
    13 (d6)          12
    14 (d7)          13
+
+   a "button"       21
 
  Adafruit_CharacterOLED lcd(OLED_V2, version, rs, rw, en, d4, d5, d6, d7);
 */
@@ -41,6 +45,9 @@ void setup()
   Serial.println();
   Serial.println("In setup");
 
+  pinMode(BUTTON, INPUT_PULLUP); //use the pullup resistor inside the board
+  pinMode(LED, OUTPUT); //use the pullup resistor inside the board
+
   // Start by connecting to a WiFi network
   connectWifi();
 
@@ -55,6 +62,12 @@ void loop()
     connectMQTT();
   }
   mqtt_client.loop();
+
+  if (digitalRead(BUTTON)) {
+    digitalWrite(LED, 0);
+  } else {
+    digitalWrite(LED, 1);
+  }
 }
 
 void connectWifi()

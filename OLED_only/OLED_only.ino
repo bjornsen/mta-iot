@@ -56,8 +56,8 @@ void setup()
 
   lcd.begin(16, 2);
   lcd.clear();
-  lcd.print("The LCD works");
   lcd.setCursor(0,0);
+  lcd.print("The LCD works");
 }
 
 
@@ -65,10 +65,9 @@ void loop()
 {
   delay(5000);
   
-  lcd.clear();
-
   Serial.println("another pass through the loop");
-  lcd.print("Still working!");
+  lcd.clear();
   lcd.setCursor(0,0);
+  lcd.print("Still working!");
 
 }

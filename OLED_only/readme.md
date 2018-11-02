@@ -1,4 +1,4 @@
-# Blink an LED
+# Wire up and drive an OLED display
 
 ![fritzing diagram](OLED_only_fritzing.png)
 

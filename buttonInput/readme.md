@@ -1,4 +1,4 @@
-# Blink an LED
+# Push a button to blink an LED
 
 ![fritzing diagram](buttonInput_fritzing.png)
 

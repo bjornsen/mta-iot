@@ -23,9 +23,6 @@
 */
 Adafruit_CharacterOLED lcd(OLED_V2, 14, 32, 15, 33, 27, 12, 13);
 
-// Astronaut data feed hostname
-const char *host = "http://api.open-notify.org/astros.json";
-
 // Set up WiFi
 const char ssid[] = SECRET_SSID;
 const char password[] = SECRET_PASS;
@@ -43,6 +40,7 @@ void setup()
   // Start by connecting to a WiFi network
   connectWifi();
 }
+
 
 void loop()
 {
@@ -63,6 +61,7 @@ void loop()
 
   Serial.println("another pass through the loop");
 }
+
 
 void connectWifi()
 {

@@ -1,26 +1,11 @@
-  /*
-   Based on the LiquidCrystal Library - Hello World
-
-   Demonstrates the use a Winstar 16x2 OLED display.  These are similar, but
-   not quite 100% compatible with the Hitachi HD44780 based LCD displays.
-
-   This sketch prints "Hello OLED World" to the LCD
-   and shows the time in seconds since startup.
-
- There is no need for the contrast pot as used in the LCD tutorial
-
- Library originally added 18 Apr 2008
- by David A. Mellis
- library modified 5 Jul 2009
- by Limor Fried (http://www.ladyada.net)
- example added 9 Jul 2009
- by Tom Igoe
- modified 22 Nov 2010
- by Tom Igoe
- Library & Example Converted for OLED
- by Bill Earl 30 Jun 2012
-
- This example code is in the public domain.
+/** @file subway.ino
+ *  @brief Displays real time MTA subway information
+ *
+ *  Displays realtime MTA subway information. Tested with
+ *  the ESP32 and Winstar 16x2 OLED display.
+ *
+ *  @author Bill Bernsen (bill@nycresistor.com)
+ *  @bug No known bugs.
  */
 
 // include the library code:
@@ -30,6 +15,7 @@
 #include <NTPClient.h>
 #include "secrets.h"
 
+#include <math.h>
 #include <algorithm>
 
 #include "subway.h"
@@ -63,6 +49,9 @@ const char STOP_NAME[] = "Atlantic Av - Barclays Ctr";
 int FEED_NUMBER = 16;
 // Filter all trains that arrive before you could get to the station
 const time_t TIME_TO_TRAIN = 5 * 60;
+// How often to check the MTA for updates. Defaults to 30s because that's how often
+// the feed is updated.
+int UPDATE_INTERVAL = 30000;
 
 // These values probably don't need to change
 const int LOG_BUFFER_SIZE = 1024;
@@ -79,10 +68,12 @@ const char *host = "datamine.mta.info";
 int data_chunk_left = -1;
 int data_buf_left = -1;
 int data_buf_offset = 0;
-
 uint8_t data_buf[PB_CHUNK_SIZE];
+
 // Other useful globals
 char *log_buffer = NULL;
+int num_failures = 0;
+time_t last_success = 0;
 WiFiClient client;
 
 // Set up time
@@ -151,11 +142,20 @@ int get_next_chunk_size(WiFiClient *client) {
   char chunk_str[16];
   int bytes_read = 0;
 
+  time_t start = (time_t) time_client.getEpochTime();
+  time_t now = start;
   while (!client->available())
   {
     delay(100);
     Serial.printf("Waiting to get_next_chunk_size...\n");
+
+    // Time out in 30s
+    if (difftime(now, start) > 30) {
+      Serial.print("Timeout in get_next_chunk_size");
+      return 0;
+    }
   }
+
   bytes_read = client->readBytesUntil('\n', &chunk_str[0], SIZE_MAX);
   Serial.printf("Read %d bytes\n", bytes_read);
 
@@ -176,10 +176,19 @@ int wifi_read(uint8_t *buf, int bytes_to_read) {
   int bytes_read = 0;
   while (bytes_to_read > bytes_read)
   {
+    time_t start = (time_t)time_client.getEpochTime();
+    time_t now = start;
     while (!client.available())
     {
       delay(100);
       Serial.printf("Waiting to wifi_read...\n");
+
+      // Time out in 30s
+      if (difftime(now, start) > 30)
+      {
+        Serial.print("Timeout in wifi_read");
+        return 0;
+      }
     }
     bytes_read += client.read(buf, bytes_to_read - bytes_read);
     Serial.printf("Read %d bytes in callback\n", bytes_read);
@@ -358,7 +367,29 @@ void loop()
   if (!ret)
   {
     log_message(LOG_ERROR, "Decode failed");
-    delay(1000);
+    // Perform exponential backoff of retries starting with 1s until it reaches the
+    // update interval
+    int retry = std::min(std::pow(2, num_failures), (double) UPDATE_INTERVAL);
+    num_failures++;
+
+    time_t now = (time_t) time_client.getEpochTime();
+    time_t diff = difftime((time_t) last_success, now);
+
+    // Only display an error after 60 seconds with no updates
+    if (diff > 60) {
+      char buf[4];
+      struct tm *diff_tm = localtime(&diff);
+      strftime(&buf[0], 4, "%S", diff_tm);
+
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.printf("No updates for %ss", buf);
+      lcd.setCursor(0, 1);
+      lcd.printf("Reboot?");
+    }
+
+    Serial.printf("Failed %d times. Retry in %dms", num_failures, retry);
+    delay(retry);
   } else {
     std::sort(arrival_list.begin(), arrival_list.end(), arrival_cmp);
 
@@ -368,6 +399,10 @@ void loop()
 
     snprintf(log_buffer, LOG_BUFFER_SIZE, "%d bytes left in the heap", ESP.getFreeHeap());
     log_message(LOG_DEBUG, log_buffer);
-    delay(30000);
+
+    num_failures = 0;
+    last_success = (time_t) time_client.getEpochTime();
+
+    delay(UPDATE_INTERVAL);
   }
 }

@@ -1,3 +1,14 @@
+/** @file subway.h
+ *  @brief Helper library for interacting with NYC MTA GTFS via nanopb
+ *
+ *  This contains a callback to register with nanopb which will pb_decode
+ *  MTA GTFS information into the provided structure along with generic
+ *  logging capabilities. Intended for use with Arduino.
+ *
+ *  @author Bill Bernsen (bill@nycresistor.com)
+ *  @bug No known bugs.
+ */
+
 #ifndef SUBWAY_H
 #define SUBWAY_H
 

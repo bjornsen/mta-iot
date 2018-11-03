@@ -1,28 +1,3 @@
-  /*
-   Based on the LiquidCrystal Library - Hello World
-   
-   Demonstrates the use a Winstar 16x2 OLED display.  These are similar, but
-   not quite 100% compatible with the Hitachi HD44780 based LCD displays. 
-   
-   This sketch prints "Hello OLED World" to the LCD
-   and shows the time in seconds since startup.
-   
- There is no need for the contrast pot as used in the LCD tutorial
- 
- Library originally added 18 Apr 2008
- by David A. Mellis
- library modified 5 Jul 2009
- by Limor Fried (http://www.ladyada.net)
- example added 9 Jul 2009
- by Tom Igoe
- modified 22 Nov 2010
- by Tom Igoe
- Library & Example Converted for OLED
- by Bill Earl 30 Jun 2012
- 
- This example code is in the public domain.
- */
-
 // include the library code:
 #include <Adafruit_CharacterOLED.h>
 #include <ArduinoJson.h>
@@ -55,8 +30,8 @@ Adafruit_CharacterOLED lcd(OLED_V2, 14, 32, 15, 33, 27, 12, 13);
 const char ssid[] = SECRET_SSID;
 const char password[] = SECRET_PASS;
 
-int endResponse = 0;
-boolean startJson = false;
+int unmatchedCurlies = 0;
+boolean startedJson = false;
 unsigned long lastConnectionTime = 10 * 60 * 1000; 	// last connect time
 const unsigned long POSTING_INTERVAL = 10 * 60 * 1000; // 10 minutes
 
@@ -74,12 +49,99 @@ void setup()
 {
   Serial.begin(115200);
   delay(100);
-
   Serial.println();
   Serial.println("In setup");
 
   // Start by connecting to a WiFi network
+  connectWifi();
+}
 
+
+void loop()
+{
+  // if 10 minutes have passed since the last check,
+  // connect again and request new data.
+  if (millis() - lastConnectionTime > POSTING_INTERVAL) {
+    // the interval is up, time for a new request, record current time first
+    lastConnectionTime = millis();
+    httpRequest();
+  }
+
+  // read in the result of the httpRequest
+  if (client.available()) {
+    char c = client.read();  // reads one character at a time, stores it in "c"
+    Serial.print(c);
+
+    if (c == '{') {
+      startedJson = true;
+      unmatchedCurlies++;
+    }
+    if (c == '}') {
+      unmatchedCurlies--;
+    }
+    if (startedJson == true) {
+      incoming_text += c; // add the character to the incoming_text
+    }
+    if (unmatchedCurlies == 0 && startedJson == true) {
+      // we're done reading, time to parse
+      parseJson(incoming_text); 
+      incoming_text = "";  // clear the string for the next httpRequest
+      startedJson = false; 
+    }
+  }
+}
+
+
+void httpRequest() {
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("in httpRequest()");
+  // Close any connection to server before opening a new one
+  client.stop(); 
+  
+  // if there is a successful connection
+  if (client.connect(SERVER, 80)) {
+	Serial.println("about to do a GET");
+    client.println("GET /astros.json HTTP/1.1\r\n"
+      "Host: api.open-notify.org\r\n"
+      "Connection: close\r\n"
+      "\r\n");
+	Serial.println("GET is done");
+  } else {
+    lcd.setCursor(0,0);
+    lcd.print("json connect failed");
+    Serial.println("connection to JSON source failed");
+  }
+}
+
+
+void parseJson(String json_string) {
+  Serial.print("incoming_text string: ");
+  Serial.println(json_string);
+
+  // parse the json!
+  JsonObject& root = jsonBuffer.parseObject(json_string);
+
+  // make sure it worked
+  if (!root.success()) {
+    Serial.println("parseObject() failed");
+    return;
+  }
+
+  // extract the data we want
+  int number_of_astros = root["number"];
+
+  // print it to the display
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print(number_of_astros);
+  lcd.print(" humans are in");
+  lcd.setCursor(0,1);
+  lcd.print("space right now.");
+}
+
+void connectWifi()
+{
   Serial.println();
   Serial.println();
   Serial.print("Connecting to ");
@@ -106,89 +168,4 @@ void setup()
   Serial.println("WiFi connected");
   Serial.println("IP address: ");
   Serial.println(WiFi.localIP());
-}
-
-
-void loop()
-{
-  // if 10 minutes have passed since the last check,
-  // connect again and request new data.
-  if (millis() - lastConnectionTime > POSTING_INTERVAL) {
-    // the interval is up, time for a new request, record current time first
-    lastConnectionTime = millis();
-    lcd.setCursor(0,0);
-    lcd.print("in loop -> httpRequest");
-    httpRequest();
-  }
-
-  // read in the result of the httpRequest
-  char c = 0;
-  if (client.available()) {
-    c = client.read();
-
-    if (endResponse == 0 && startJson == true) {
-      // we're done reading, time to parse
-      parseJson(incoming_text.c_str()); 
-      incoming_text = "";  // clear the string for the next httpRequest
-      startJson = false; 
-    }
-    if (c == '{') {
-      startJson = true;
-      endResponse++;
-    }
-    if (c == '}') {
-      endResponse--;
-    }
-    if (startJson == true) {
-      incoming_text += c;
-    }
-  }
-}
-
-
-void httpRequest() {
-  lcd.clear();
-  lcd.setCursor(0,0);
-  lcd.print("in httpRequest()");
-  // Close any connection to server before opening a new one
-  client.stop(); 
-  
-  // if there is a successful connection
-  if (client.connect(SERVER, 80)) {
-    client.println("GET /astros.json HTTP/1.1\r\nHost: api.open-notify.org\r\n\r\n");
-    client.println("Connection: close");
-    client.println();
-  } else {
-    lcd.setCursor(0,0);
-    lcd.print("json connect failed");
-    Serial.println("connection to JSON source failed");
-  }
-}
-
-
-void parseJson(String json_string) {
-  Serial.println(json_string);
-  // cast the string to a character array for parseObject
-  char * json = new char [json_string.length() +1];
-  strcpy(json, json_string.c_str());
-
-  // actually parse it
-  JsonObject& root = jsonBuffer.parseObject(json);
-
-  // make sure it worked
-  if (!root.success()) {
-    Serial.println("parseObject() failed");
-    return;
-  }
-
-  // extract the data we want
-  int number_of_astros = root["number"];
-
-  // print it to the display
-  lcd.clear();
-  lcd.setCursor(0,0);
-  lcd.print("There are ");
-  lcd.print(number_of_astros);
-  lcd.setCursor(0,1);
-  lcd.print(" humans in space.");
 }

@@ -143,6 +143,7 @@ void connectMQTT()
     lcd.print("MQTT");
   } 
   mqtt_client.subscribe("Slidervalue");
+  mqtt_client.subscribe("button");
 }
 
 
@@ -150,11 +151,12 @@ void connectMQTT()
 // which topic it's for, and then process
 void callback(char* topic, byte* payload, unsigned int length)
 {
-    Serial.print("Receiving: ");
-    Serial.print(topic);
-    Serial.print(" = ");
-    Serial.write(payload, length);
-    Serial.println(" ");
+  Serial.print("Receiving: ");
+  Serial.print(topic);
+  Serial.print(" = ");
+  Serial.write(payload, length);
+  Serial.println(" ");
+
   if (strcmp(topic, "Slidervalue") == 0) {
     lcd.setCursor(0,0);
     lcd.print("Slider value:   ");
@@ -162,7 +164,14 @@ void callback(char* topic, byte* payload, unsigned int length)
     for (int i = 0; i < length; i++) {
       lcd.print((char)(payload[i]));
     }
+  } 
+
+  if (strcmp(topic, "button") == 0) {
     lcd.setCursor(0,1);
-    lcd.print("Button: ");
+    lcd.print("Button value:   ");
+    lcd.setCursor(16-length,1);
+    for (int i = 0; i < length; i++) {
+      lcd.print((char)(payload[i]));
+    }
   } 
 }

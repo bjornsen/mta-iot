@@ -38,6 +38,9 @@ const char password[] = SECRET_PASS;
 WiFiClient wifi_client;
 PubSubClient mqtt_client(wifi_client);
 
+int buttonState = -1;
+long last_button;
+
 void setup()
 {
   Serial.begin(115200);
@@ -63,10 +66,23 @@ void loop()
   }
   mqtt_client.loop();
 
+  // Make the red onboard LED light when we press the "button"
   if (digitalRead(BUTTON)) {
     digitalWrite(LED, 0);
+    if (buttonState != 0 && millis() - last_button > 50) {
+      //publish new state to MQTT
+      mqtt_client.publish("button", "0");
+      buttonState = 0;
+      last_button = millis();
+    }
   } else {
     digitalWrite(LED, 1);
+    if (buttonState != 1 && millis() - last_button > 50) {
+      //publish new state to MQTT
+      mqtt_client.publish("button", "1");
+      buttonState = 1;
+      last_button = millis();
+    }
   }
 }
 

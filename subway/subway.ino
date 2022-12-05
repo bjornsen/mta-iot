@@ -46,7 +46,7 @@ Adafruit_CharacterOLED lcd(OLED_V2, 14, 32, 15, 33, 27, 12, 13);
 // Look up your station from stops.txt downloaded here: https://transitfeeds.com/p/mta/79
 const char *STATION_LIST[4] = {"D24N", "R31N","",""};
 const char STOP_NAME[] = "Atlantic Av - Barclays Ctr";
-int FEED_NUMBER = 16;
+std::vector<int> FEED_NUMBERS = (16, 23);
 // Filter all trains that arrive before you could get to the station
 const time_t TIME_TO_TRAIN = 5 * 60;
 // How often to check the MTA for updates. Defaults to 30s because that's how often
@@ -267,11 +267,11 @@ bool pb_istream_callback(pb_istream_t *stream, uint8_t *buf, size_t count) {
 }
 
 // Sends a GET request to the MTA then reads and prints the headers
-void request_data() {
+void request_data(int feed_number) {
   // This will send the request to the server
   int url_len = 256;
   char url[url_len];
-  snprintf(&url[0], url_len, "/mta_esi.php?key=%s&feed_id=%i", API_KEY, FEED_NUMBER);
+  snprintf(&url[0], url_len, "/mta_esi.php?key=%s&feed_id=%i", API_KEY, feed_number);
 
   // Create a URI for the request
   log_message(LOG_INFO, "Requesting URL: ");
@@ -326,62 +326,65 @@ void loop()
     Serial.println("connection failed");
     return;
   }
-  request_data();
 
-  data_chunk_left = 0;
-  data_buf_left = 0;
-  data_buf_offset = 0;
+  std::vector<ArrivalInfo> arrival_list;
   pb_istream_t istream = {&pb_istream_callback, &client, SIZE_MAX};
 
-  transit_realtime_FeedMessage feedmessage = {};
-  memset(&feedmessage, 0,sizeof(transit_realtime_FeedMessage));
-  std::vector<ArrivalInfo> arrival_list;
+  for (auto &feed_number : FEED_NUMBERS) {
+    request_data(feed_number);
 
-  feedmessage.entity.funcs.decode = &entity_callback;
-  feedmessage.entity.arg = (void *)&arrival_list;
+    data_chunk_left = 0;
+    data_buf_left = 0;
+    data_buf_offset = 0;
 
-  bool ret = pb_decode(&istream, transit_realtime_FeedMessage_fields, &feedmessage);
-  if (!ret)
-  {
-    log_message(LOG_ERROR, "Decode failed");
-    // Perform exponential backoff of retries starting with 1s until it reaches the
-    // update interval
-    int retry = std::min(std::pow(2, num_failures), (double) UPDATE_INTERVAL);
-    num_failures++;
+    transit_realtime_FeedMessage feedmessage = {};
+    memset(&feedmessage, 0,sizeof(transit_realtime_FeedMessage));
 
-    time_t now = (time_t) time_client.getEpochTime();
-    time_t diff = difftime((time_t) last_success, now);
+    feedmessage.entity.funcs.decode = &entity_callback;
+    feedmessage.entity.arg = (void *)&arrival_list;
 
-    // Only display an error after 60 seconds with no updates
-    if (diff > 60) {
-      char buf[4];
-      struct tm *diff_tm = localtime(&diff);
-      strftime(&buf[0], 4, "%S", diff_tm);
+    bool ret = pb_decode(&istream, transit_realtime_FeedMessage_fields, &feedmessage);
+    if (!ret)
+    {
+      log_message(LOG_ERROR, "Decode failed");
+      // Perform exponential backoff of retries starting with 1s until it reaches the
+      // update interval
+      int retry = std::min(std::pow(2, num_failures), (double) UPDATE_INTERVAL);
+      num_failures++;
 
-      lcd.clear();
-      lcd.setCursor(0, 0);
-      lcd.printf("No updates for %ss", buf);
-      lcd.setCursor(0, 1);
-      lcd.printf("Reboot?");
-    }
+      time_t now = (time_t) time_client.getEpochTime();
+      time_t diff = difftime((time_t) last_success, now);
 
-    Serial.printf("Failed %d times. Retry in %dms", num_failures, retry);
-    delay(retry);
-  } else {
-    std::sort(arrival_list.begin(), arrival_list.end(), arrival_cmp);
+      // Only display an error after 60 seconds with no updates
+      if (diff > 60) {
+        char buf[4];
+        struct tm *diff_tm = localtime(&diff);
+        strftime(&buf[0], 4, "%S", diff_tm);
 
-    // Read all the lines of the reply from server and print them to Serial
-    print_arrival_list(arrival_list);
-    lcd_print_arrival_list(arrival_list);
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.printf("No updates for %ss", buf);
+        lcd.setCursor(0, 1);
+        lcd.printf("Reboot?");
+      }
 
-    snprintf(log_buffer, LOG_BUFFER_SIZE, "%d bytes left in the heap", ESP.getFreeHeap());
-    log_message(LOG_DEBUG, log_buffer);
-
-    num_failures = 0;
-    last_success = (time_t) time_client.getEpochTime();
-
-    delay(UPDATE_INTERVAL);
+      Serial.printf("Failed %d times. Retry in %dms", num_failures, retry);
+      delay(retry);
   }
+
+  std::sort(arrival_list.begin(), arrival_list.end(), arrival_cmp);
+
+  // Read all the lines of the reply from server and print them to Serial
+  print_arrival_list(arrival_list);
+  lcd_print_arrival_list(arrival_list);
+
+  snprintf(log_buffer, LOG_BUFFER_SIZE, "%d bytes left in the heap", ESP.getFreeHeap());
+  log_message(LOG_DEBUG, log_buffer);
+
+  num_failures = 0;
+  last_success = (time_t) time_client.getEpochTime();
+
+  delay(UPDATE_INTERVAL);
 }
 
 void connectWiFi()
